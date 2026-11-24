@@ -1,0 +1,3 @@
+-r requirements.txt
+matplotlib>=3.7       # plots in experiments/run_experiments.py
+scikit-image>=0.21    # optional: cross-check SSIM against the reference implementation

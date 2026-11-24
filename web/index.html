@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Denoise Lab — Image Noise Removal</title>
+  <meta name="description" content="Image noise removal using digital image processing filters — mean, median, Gaussian and bilateral filters evaluated with MSE, PSNR and SSIM.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b0e12'/%3E%3Cpath d='M6 16h4l3-8 6 16 3-8h4' stroke='%23ffb547' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <script>
+    try { const t = localStorage.getItem('theme'); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+  </script>
+</head>
+<body>
+<a class="skip" href="#lab">Skip to the lab</a>
+
+<header class="topbar">
+  <a class="brand" href="#top" aria-label="Denoise Lab home">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M4 16h5l3.5-9 7 18 3.5-9h5"/></svg>
+    <span>Denoise<b>/</b>Lab</span>
+  </a>
+  <nav class="nav" aria-label="Sections">
+    <a href="#lab">Lab</a>
+    <a href="#detect">Detect</a>
+    <a href="#benchmark">Benchmark</a>
+    <a href="#theory">Theory</a>
+    <a href="#timeline">Timeline</a>
+  </nav>
+  <button class="icon-btn" id="themeToggle" type="button" aria-label="Toggle colour theme">
+    <svg class="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+    <svg class="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+  </button>
+</header>
+
+<main id="top">
+  <!-- ============================================================ HERO -->
+  <section class="hero">
+    <div class="hero-copy">
+      <p class="eyebrow" data-reveal>Minor Project · ARP-455 · USAR, GGSIPU East Delhi Campus</p>
+      <h1 data-reveal style="--i:1">Image noise removal using <em>digital image processing</em> filters</h1>
+      <p class="lede" data-reveal style="--i:2">Corrupt an image with salt-and-pepper, Gaussian, speckle or Poisson noise, clean it with mean, median, Gaussian or bilateral filtering, and measure the result with MSE, PSNR and SSIM. Everything below runs on the real Python + OpenCV pipeline.</p>
+      <div class="cta" data-reveal style="--i:3">
+        <a class="btn btn-primary" href="#lab">Open the lab</a>
+        <a class="btn btn-ghost" href="#benchmark">Run the benchmark</a>
+      </div>
+      <dl class="stats" data-reveal style="--i:4">
+        <div><dt>Noise models</dt><dd>4</dd></div>
+        <div><dt>Spatial filters</dt><dd>4</dd></div>
+        <div><dt>Quality metrics</dt><dd>3</dd></div>
+        <div><dt>Kernel sizes</dt><dd>3–15</dd></div>
+      </dl>
+    </div>
+    <figure class="hero-visual" data-reveal style="--i:2">
+      <canvas id="heroCanvas" width="440" height="440" aria-label="Animated demo: noise being filtered from an image"></canvas>
+      <figcaption><span class="dot dot-noisy"></span>noisy <span class="sep"></span><span class="dot dot-clean"></span>filtered — median 3×3</figcaption>
+    </figure>
+  </section>
+
+  <!-- ============================================================ LAB -->
+  <section id="lab" class="section">
+    <header class="section-head" data-reveal>
+      <p class="eyebrow">01 — Interactive lab</p>
+      <h2>Add noise, filter it, measure it</h2>
+      <p>Every change re-runs the pipeline on the server. The same seed means every filter sees identical noise.</p>
+    </header>
+
+    <ol class="pipeline" id="pipeline" aria-label="Processing pipeline" data-reveal>
+      <li data-step="0"><span>Input image</span></li>
+      <li data-step="1"><span>Noise addition</span></li>
+      <li data-step="2"><span>Noise analysis</span></li>
+      <li data-step="3"><span>Filtering</span></li>
+      <li data-step="4"><span>Denoised image</span></li>
+      <li data-step="5"><span>Quality evaluation</span></li>
+      <li data-step="6"><span>Comparison</span></li>
+    </ol>
+
+    <div class="lab">
+      <aside class="panel controls" data-reveal aria-label="Experiment controls">
+        <fieldset>
+          <legend>Image</legend>
+          <div class="thumbs" id="thumbs"></div>
+          <label class="drop" id="drop">
+            <input type="file" id="fileInput" accept="image/*">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+            <span id="dropText">Drop your own image or <u>browse</u></span>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Noise model</legend>
+          <div class="seg" id="noiseSeg" role="radiogroup" aria-label="Noise model"></div>
+          <div class="field">
+            <label for="level"><span id="levelLabel">Level</span><output id="levelOut"></output></label>
+            <input type="range" id="level">
+          </div>
+          <div class="field row">
+            <label for="seed">Random seed</label>
+            <div class="seed">
+              <input type="number" id="seed" value="0" min="0" max="99999">
+              <button type="button" class="icon-btn sm" id="reseed" aria-label="New random seed">
+                <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2"/><circle cx="15" cy="15" r="1.2"/><circle cx="15" cy="9" r="1.2"/><circle cx="9" cy="15" r="1.2"/></svg>
+              </button>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Filter</legend>
+          <div class="seg" id="filterSeg" role="radiogroup" aria-label="Filter"></div>
+          <div class="field">
+            <label for="ksize"><span id="ksizeLabel">Kernel size</span><output id="ksizeOut"></output></label>
+            <input type="range" id="ksize" min="3" max="15" step="2" value="3">
+          </div>
+          <div class="field" data-for="gaussian">
+            <label for="sigma">σ (0 = derived from kernel)<output id="sigmaOut"></output></label>
+            <input type="range" id="sigma" min="0" max="8" step="0.1" value="0">
+          </div>
+          <div class="field" data-for="bilateral">
+            <label for="sigmaColor">σ colour (range)<output id="sigmaColorOut"></output></label>
+            <input type="range" id="sigmaColor" min="5" max="200" step="1" value="75">
+          </div>
+          <div class="field" data-for="bilateral">
+            <label for="sigmaSpace">σ space<output id="sigmaSpaceOut"></output></label>
+            <input type="range" id="sigmaSpace" min="5" max="200" step="1" value="75">
+          </div>
+          <button type="button" class="btn btn-ghost wide" id="useRec">Use recommended filter</button>
+        </fieldset>
+      </aside>
+
+      <div class="viewer-col">
+        <div class="panel viewer" data-reveal style="--i:1">
+          <div class="viewer-bar">
+            <div class="tabs" role="tablist" id="viewTabs">
+              <button role="tab" aria-selected="true" data-view="slider">Before / after</button>
+              <button role="tab" aria-selected="false" data-view="grid">Side by side</button>
+              <button role="tab" aria-selected="false" data-view="residual">Residual</button>
+            </div>
+            <label class="toggle"><input type="checkbox" id="vsOriginal"><span>Compare with original</span></label>
+          </div>
+
+          <div class="stage" id="stage" aria-busy="true">
+            <div class="view view-slider is-active" data-view="slider">
+              <div class="compare" id="compare">
+                <img id="cmpA" alt="Noisy image">
+                <div class="compare-top" id="cmpTopWrap"><img id="cmpB" alt="Denoised image"></div>
+                <span class="tag tag-l" id="cmpLabelA">Noisy</span>
+                <span class="tag tag-r" id="cmpLabelB">Denoised</span>
+                <div class="handle" id="handle" role="slider" tabindex="0" aria-label="Comparison position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span></span></div>
+              </div>
+            </div>
+            <div class="view view-grid" data-view="grid">
+              <figure><img id="gOrig" alt="Original"><figcaption>Original</figcaption></figure>
+              <figure><img id="gNoisy" alt="Noisy"><figcaption>Noisy</figcaption></figure>
+              <figure><img id="gOut" alt="Denoised"><figcaption>Denoised</figcaption></figure>
+            </div>
+            <div class="view view-residual" data-view="residual">
+              <figure><img id="resImg" alt="Residual error map"><figcaption>|original − denoised| × 4 — bright = remaining error or lost detail</figcaption></figure>
+            </div>
+            <div class="scan" aria-hidden="true"></div>
+          </div>
+          <p class="meta" id="imgMeta" aria-live="polite"></p>
+        </div>
+
+        <div class="metrics" id="metrics">
+          <article class="panel metric" data-reveal style="--i:2" data-key="mse">
+            <header><h3>MSE</h3><span class="hint">lower is better</span></header>
+            <p class="big"><span class="num" data-v="denoised">—</span></p>
+            <p class="from">noisy <span class="num" data-v="noisy">—</span> <span class="delta"></span></p>
+            <div class="bar"><i></i></div>
+          </article>
+          <article class="panel metric" data-reveal style="--i:3" data-key="psnr">
+            <header><h3>PSNR</h3><span class="hint">dB · higher is better</span></header>
+            <p class="big"><span class="num" data-v="denoised">—</span></p>
+            <p class="from">noisy <span class="num" data-v="noisy">—</span> <span class="delta"></span></p>
+            <div class="bar"><i></i></div>
+          </article>
+          <article class="panel metric" data-reveal style="--i:4" data-key="ssim">
+            <header><h3>SSIM</h3><span class="hint">0–1 · higher is better</span></header>
+            <p class="big"><span class="num" data-v="denoised">—</span></p>
+            <p class="from">noisy <span class="num" data-v="noisy">—</span> <span class="delta"></span></p>
+            <div class="bar"><i></i></div>
+          </article>
+        </div>
+
+        <div class="duo">
+          <article class="panel" data-reveal>
+            <header class="card-head"><h3>Intensity histogram</h3>
+              <ul class="legend"><li class="l-orig">Original</li><li class="l-noisy">Noisy</li><li class="l-out">Denoised</li></ul>
+            </header>
+            <svg class="hist" id="hist" viewBox="0 0 400 180" preserveAspectRatio="none" role="img" aria-label="Histogram of original, noisy and denoised images"></svg>
+            <div class="axis"><span>0</span><span>128</span><span>255</span></div>
+          </article>
+          <article class="panel analysis" data-reveal style="--i:1">
+            <header class="card-head"><h3>Noise analysis</h3><span class="chip" id="detMatch"></span></header>
+            <p class="det-type"><span id="detType">—</span><small id="detConf"></small></p>
+            <ul class="scores" id="detScores"></ul>
+            <dl class="kv">
+              <div><dt>Estimated σ</dt><dd id="detSigma">—</dd></div>
+              <div><dt>Impulse ratio</dt><dd id="detImpulse">—</dd></div>
+              <div><dt>Var–mean slope</dt><dd id="detSlope">—</dd></div>
+            </dl>
+            <p class="rec" id="detRec"></p>
+          </article>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ DETECT -->
+  <section id="detect" class="section">
+    <header class="section-head" data-reveal>
+      <p class="eyebrow">02 — No-reference mode</p>
+      <h2>Already have a noisy photo?</h2>
+      <p>Without a clean original there is nothing to compute MSE against, so the system looks at the noise itself. Impulse pixels give away salt-and-pepper; for the rest, how the local variance grows with brightness tells the models apart: flat for Gaussian, linear for Poisson, quadratic for speckle.</p>
+    </header>
+    <div class="detect">
+      <div class="panel detect-in" data-reveal>
+        <label class="drop big-drop" id="drop2">
+          <input type="file" id="fileInput2" accept="image/*">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+          <span id="drop2Text">Drop a noisy image, or <u>browse</u></span>
+        </label>
+        <p class="or">or try a pre-corrupted sample</p>
+        <div class="chips" id="detSamples"></div>
+        <div class="loglog-wrap">
+          <h3>Local variance vs. mean intensity <small>(log–log)</small></h3>
+          <svg id="loglog" viewBox="0 0 360 220" role="img" aria-label="Variance versus intensity plot"></svg>
+          <p class="note" id="loglogNote">Reference slopes: 0 Gaussian · 1 Poisson · 2 speckle.</p>
+        </div>
+      </div>
+      <div class="panel detect-out" data-reveal style="--i:1">
+        <div class="compare" id="compare2">
+          <img id="d2A" alt="Uploaded noisy image">
+          <div class="compare-top"><img id="d2B" alt="Automatically denoised image"></div>
+          <span class="tag tag-l">Input</span><span class="tag tag-r">Auto-denoised</span>
+          <div class="handle" role="slider" tabindex="0" aria-label="Comparison position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><span></span></div>
+          <div class="empty" id="d2Empty">Your result appears here</div>
+        </div>
+        <div class="d2-facts">
+          <div><span class="k">Detected</span><span class="v" id="d2Type">—</span></div>
+          <div><span class="k">Confidence</span><span class="v" id="d2Conf">—</span></div>
+          <div><span class="k">Filter applied</span><span class="v" id="d2Filter">—</span></div>
+          <div><span class="k">Noise σ before → after</span><span class="v" id="d2Sigma">—</span></div>
+        </div>
+        <p class="rec" id="d2Why"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ BENCHMARK -->
+  <section id="benchmark" class="section">
+    <header class="section-head" data-reveal>
+      <p class="eyebrow">03 — Performance evaluation &amp; comparison</p>
+      <h2>Which filter wins, and at what kernel size?</h2>
+      <p>Uses the image, noise model and level currently set in the lab. Each of the 16 filter × kernel combinations is applied to the same noisy input.</p>
+    </header>
+
+    <div class="bench-bar" data-reveal>
+      <button class="btn btn-primary" id="runCompare" type="button">Run 16-way comparison</button>
+      <button class="btn btn-ghost" id="runMatrix" type="button">Test all 4 noise models</button>
+      <div class="seg mini" id="metricSeg" role="radiogroup" aria-label="Metric">
+        <button role="radio" aria-checked="true" data-m="ssim">SSIM</button>
+        <button role="radio" aria-checked="false" data-m="psnr">PSNR</button>
+        <button role="radio" aria-checked="false" data-m="mse">MSE</button>
+      </div>
+      <button class="btn btn-ghost" id="exportCsv" type="button" disabled>Export CSV</button>
+    </div>
+
+    <div class="bench" id="bench">
+      <article class="panel" data-reveal>
+        <header class="card-head"><h3>Filter × kernel size</h3><span class="chip" id="benchCtx">not run yet</span></header>
+        <div class="heat" id="heat" role="table" aria-label="Metric for each filter and kernel size"></div>
+        <p class="verdict" id="verdict">Run the comparison to see which combination scores best.</p>
+      </article>
+      <article class="panel" data-reveal style="--i:1">
+        <header class="card-head"><h3>Kernel size response</h3></header>
+        <svg class="lines" id="kernelChart" viewBox="0 0 400 220" role="img" aria-label="Metric versus kernel size for each filter"></svg>
+        <ul class="legend" id="kernelLegend"></ul>
+      </article>
+    </div>
+
+    <div class="gallery" id="gallery"></div>
+
+    <article class="panel matrix-card" id="matrixCard" hidden>
+      <header class="card-head"><h3>Best SSIM per noise model <small>(best kernel of 3/5/7, default noise level)</small></h3><span class="chip" id="matrixCtx"></span></header>
+      <div class="matrix" id="matrix" role="table" aria-label="Best SSIM by noise type and filter"></div>
+      <p class="note">“Synopsis” is the expected best filter from Table 2. A mismatch is a finding, not a failure. It shows the prediction being tested.</p>
+    </article>
+  </section>
+
+  <!-- ============================================================ THEORY -->
+  <section id="theory" class="section">
+    <header class="section-head" data-reveal>
+      <p class="eyebrow">04 — Background</p>
+      <h2>Noise models, filters and metrics</h2>
+    </header>
+
+    <h3 class="sub" data-reveal>Noise models <small>each swatch is a 0→255 ramp, so you can see which noise depends on brightness</small></h3>
+    <div class="cards four" id="noiseCards">
+      <article class="panel card" data-reveal>
+        <canvas class="swatch" data-noise="salt_pepper" width="320" height="56"></canvas>
+        <h4>Salt-and-pepper</h4>
+        <p class="formula">g = 0 or 255 with probability d</p>
+        <p>Impulse noise from bit errors and faulty sensor cells: scattered black and white dots, independent of the signal.</p>
+      </article>
+      <article class="panel card" data-reveal style="--i:1">
+        <canvas class="swatch" data-noise="gaussian" width="320" height="56"></canvas>
+        <h4>Gaussian</h4>
+        <p class="formula">g = f + n, &nbsp;n ~ N(0, σ²)</p>
+        <p>Additive, zero-mean thermal and amplifier noise affecting every pixel equally, regardless of brightness.</p>
+      </article>
+      <article class="panel card" data-reveal style="--i:2">
+        <canvas class="swatch" data-noise="speckle" width="320" height="56"></canvas>
+        <h4>Speckle</h4>
+        <p class="formula">g = f + n·f</p>
+        <p>Multiplicative granular noise of coherent imaging (radar, ultrasound, laser), stronger in bright regions.</p>
+      </article>
+      <article class="panel card" data-reveal style="--i:3">
+        <canvas class="swatch" data-noise="poisson" width="320" height="56"></canvas>
+        <h4>Poisson</h4>
+        <p class="formula">g ~ Poisson(f) &nbsp;·&nbsp; Var = mean</p>
+        <p>Shot noise from the discrete nature of light; dominates in low-light, microscopy and low-dose imaging.</p>
+      </article>
+    </div>
+
+    <h3 class="sub" data-reveal>Filters</h3>
+    <div class="cards four">
+      <article class="panel card" data-reveal><span class="kern" aria-hidden="true" data-k="mean"></span><h4>Mean</h4><p class="formula">cv2.blur</p><p>Equal-weight average of the neighbourhood. Cuts variance of additive noise, blurs edges and smears impulses.</p></article>
+      <article class="panel card" data-reveal style="--i:1"><span class="kern" aria-hidden="true" data-k="median"></span><h4>Median</h4><p class="formula">cv2.medianBlur</p><p>Non-linear order statistic. Ignores a minority of outliers, so impulses vanish and step edges survive.</p></article>
+      <article class="panel card" data-reveal style="--i:2"><span class="kern" aria-hidden="true" data-k="gaussian"></span><h4>Gaussian</h4><p class="formula">cv2.GaussianBlur</p><p>Distance-weighted average; smoother and more natural than the box filter, separable and fast.</p></article>
+      <article class="panel card" data-reveal style="--i:3"><span class="kern" aria-hidden="true" data-k="bilateral"></span><h4>Bilateral</h4><p class="formula">cv2.bilateralFilter</p><p>Spatial Gaussian × intensity Gaussian: smooths within regions but not across edges. Slower, two parameters.</p></article>
+    </div>
+
+    <h3 class="sub" data-reveal>Metrics</h3>
+    <div class="cards three">
+      <article class="panel card" data-reveal><h4>Mean Squared Error</h4><p class="formula">MSE = (1/MN) ΣΣ [f(i,j) − g(i,j)]²</p><p>Average squared pixel difference. Simple, but blind to how visible an error is.</p></article>
+      <article class="panel card" data-reveal style="--i:1"><h4>Peak Signal-to-Noise Ratio</h4><p class="formula">PSNR = 10 · log₁₀(255² / MSE) dB</p><p>MSE on a log scale. 30 dB+ is usually good for 8-bit images.</p></article>
+      <article class="panel card" data-reveal style="--i:2"><h4>Structural Similarity</h4><p class="formula">SSIM ∈ [−1, 1], 1 = identical</p><p>Compares local luminance, contrast and structure, so it catches over-smoothed edges that PSNR forgives.</p></article>
+    </div>
+  </section>
+
+  <!-- ============================================================ TIMELINE -->
+  <section id="timeline" class="section">
+    <header class="section-head" data-reveal>
+      <p class="eyebrow">05 — Proposed project timeline</p>
+      <h2>Twelve weeks, nine phases</h2>
+    </header>
+    <div class="panel gantt" id="gantt" data-reveal role="table" aria-label="Gantt chart of project phases"></div>
+    <ul class="legend status-legend" data-reveal>
+      <li class="s-done">Completed</li><li class="s-active">In progress</li><li class="s-todo">Upcoming</li>
+    </ul>
+  </section>
+</main>
+
+<footer class="footer">
+  <div>
+    <p class="f-title">Image Noise Removal using Digital Image Processing Filters</p>
+    <p>Abubakar Siddiqui · Enrolment 08019051723 · B.Tech (Industrial IoT)</p>
+    <p>Supervisor: Ms. Anuj Kumar, Assistant Professor · USAR, GGSIPU East Delhi Campus · Session 2025-26</p>
+  </div>
+  <p class="f-stack">Python · OpenCV · NumPy · scikit-image · FastAPI</p>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="app.js"></script>
+</body>
+</html>

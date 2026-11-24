@@ -1,6 +1,7 @@
 """Systematic comparison: every filter x kernel size on identical noisy input."""
 import time
 
+from .analysis import detect_noise
 from .filters import apply_filter, FILTER_NAMES
 from .metrics import evaluate
 from .noise import add_noise, NOISE_PARAMS
@@ -38,5 +39,9 @@ def noise_filter_matrix(clean, kernels=(3, 5, 7), seed=0):
             b = best_row([r for r in rows if r["filter"] == f])
             cells[f] = {k: b[k] for k in ("ksize", "mse", "psnr", "ssim")}
         winner = max(cells, key=lambda f: cells[f]["ssim"])
-        out[n] = {"noisy": base, "filters": cells, "best": winner, "level": p["default"]}
+        from .enhanced import apply_enhanced  # local import avoids a cycle at package load
+        info = detect_noise(noisy)
+        auto_img, _ = apply_enhanced(noisy, "auto", info)
+        auto = dict(evaluate(clean, auto_img), method=info["enhanced"]["filter"], detected=info["type"])
+        out[n] = {"noisy": base, "filters": cells, "best": winner, "level": p["default"], "auto": auto}
     return out

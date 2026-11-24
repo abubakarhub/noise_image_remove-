@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from denoise import (FILTER_NAMES, NOISE_NAMES, NOISE_PARAMS, RECOMMENDED, add_noise,
                      apply_filter, detect_noise, evaluate, global_sigma, histogram)
 from denoise.benchmark import KERNELS, best_row, compare_filters, noise_filter_matrix
+from denoise.enhanced import ENHANCED_NAMES, apply_enhanced
 
 ROOT = Path(__file__).parent
 SAMPLES = ROOT / "samples"
@@ -89,12 +90,26 @@ def _filter_kwargs(sigma, sigma_color, sigma_space):
             "bilateral": {"sigma_color": sigma_color, "sigma_space": sigma_space}}
 
 
+def _method_info(key, analysis):
+    """Which enhanced method actually ran (Auto resolves to one) and with what strength."""
+    applied = analysis["enhanced"]["filter"] if key == "auto" else key
+    if applied == "none":
+        label = "Auto → no filtering (image looks clean)"
+    else:
+        label = f"Auto → {ENHANCED_NAMES[applied]}" if key == "auto" else ENHANCED_NAMES[applied]
+    p = analysis.get("params") or {}
+    strength = ", ".join(f"{k} {v}" for k, v in p.items())
+    return {"key": key, "applied": applied, "label": label, "enhanced": True,
+            "strength": strength, "why": analysis["enhanced"]["why"]}
+
+
 # ---------------------------------------------------------------- API
 @app.get("/api/config")
 def config():
     return {
         "noises": {k: {"name": NOISE_NAMES[k], **v} for k, v in NOISE_PARAMS.items()},
         "filters": FILTER_NAMES,
+        "enhanced": ENHANCED_NAMES,
         "kernels": list(KERNELS),
         "samples": SAMPLE_INFO,
         "recommended": RECOMMENDED,
@@ -117,18 +132,25 @@ async def process(
 ):
     """Reference experiment: clean -> add noise -> analyse -> filter -> evaluate."""
     clean = await _load(file, sample)
-    if noise not in NOISE_PARAMS or filter not in FILTER_NAMES:
+    if noise not in NOISE_PARAMS or (filter not in FILTER_NAMES and filter not in ENHANCED_NAMES):
         raise HTTPException(400, "Unknown noise or filter")
     noisy = add_noise(clean, noise, level, seed)
-    out = apply_filter(noisy, filter, ksize, **_filter_kwargs(sigma, sigma_color, sigma_space).get(filter, {}))
+    analysis = detect_noise(noisy)
+    if filter in ENHANCED_NAMES:
+        out, _ = apply_enhanced(noisy, filter, analysis)
+        method = _method_info(filter, analysis)
+    else:
+        out = apply_filter(noisy, filter, ksize, **_filter_kwargs(sigma, sigma_color, sigma_space).get(filter, {}))
+        method = {"key": filter, "label": f"{FILTER_NAMES[filter]} {ksize}×{ksize}", "enhanced": False}
     return {
+        "method": method,
         "size": [clean.shape[1], clean.shape[0]],
         "color": clean.ndim == 3,
         "images": {"original": _b64(clean), "noisy": _b64(noisy), "denoised": _b64(out),
                    "residual": _b64(_diff_map(clean, out), ".jpg")},
         "metrics": {"noisy": evaluate(clean, noisy), "denoised": evaluate(clean, out)},
         "histograms": {"original": histogram(clean), "noisy": histogram(noisy), "denoised": histogram(out)},
-        "analysis": detect_noise(noisy),
+        "analysis": analysis,
     }
 
 
@@ -137,10 +159,10 @@ async def detect(file: UploadFile | None = File(None), sample: str | None = Form
     """No-reference mode: user's own noisy photo -> detect type -> apply recommended filter."""
     noisy = await _load(file, sample)
     info = detect_noise(noisy)
-    rec = info["recommendation"]
-    out = apply_filter(noisy, rec["filter"], rec["ksize"])
+    out, _ = apply_enhanced(noisy, "auto", info)
     return {
         "analysis": info,
+        "method": _method_info("auto", info),
         "images": {"noisy": _b64(noisy), "denoised": _b64(out), "residual": _b64(_diff_map(noisy, out), ".jpg")},
         "sigma_after": round(global_sigma(out), 2),
         "histograms": {"noisy": histogram(noisy), "denoised": histogram(out)},
@@ -159,7 +181,11 @@ async def compare(
     rows = compare_filters(clean, noisy, KERNELS, _filter_kwargs(sigma, sigma_color, sigma_space))
     best = {f: best_row([r for r in rows if r["filter"] == f]) for f in FILTER_NAMES}
     overall = best_row(rows)
+    info = detect_noise(noisy)
+    auto_img, _ = apply_enhanced(noisy, "auto", info)
+    auto = {**evaluate(clean, auto_img), "image": _b64(auto_img), "method": _method_info("auto", info)}
     return {
+        "auto": auto,
         "noisy": evaluate(clean, noisy),
         "noisy_image": _b64(noisy),
         "rows": [{k: v for k, v in r.items() if k != "_img"} for r in rows],

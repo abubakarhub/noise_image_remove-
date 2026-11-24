@@ -110,7 +110,8 @@
         <fieldset>
           <legend>Filter</legend>
           <div class="seg" id="filterSeg" role="radiogroup" aria-label="Filter"></div>
-          <div class="field">
+          <p class="note enh-note" id="enhNote" hidden>Strength is set automatically from the noise analysis — no kernel to choose.</p>
+          <div class="field" id="ksizeField">
             <label for="ksize"><span id="ksizeLabel">Kernel size</span><output id="ksizeOut"></output></label>
             <input type="range" id="ksize" min="3" max="15" step="2" value="3">
           </div>
@@ -126,7 +127,7 @@
             <label for="sigmaSpace">σ space<output id="sigmaSpaceOut"></output></label>
             <input type="range" id="sigmaSpace" min="5" max="200" step="1" value="75">
           </div>
-          <button type="button" class="btn btn-ghost wide" id="useRec">Use recommended filter</button>
+          <button type="button" class="btn btn-ghost wide" id="useRec">Use recommended (Auto)</button>
         </fieldset>
       </aside>
 
@@ -214,7 +215,7 @@
     <header class="section-head" data-reveal>
       <p class="eyebrow">02 — No-reference mode</p>
       <h2>Already have a noisy photo?</h2>
-      <p>Without a clean original there is nothing to compute MSE against, so the system looks at the noise itself. Impulse pixels give away salt-and-pepper; for the rest, how the local variance grows with brightness tells the models apart: flat for Gaussian, linear for Poisson, quadratic for speckle.</p>
+      <p>Without a clean original there is nothing to compute MSE against, so the system looks at the noise itself. Isolated 0/255 spikes give away salt-and-pepper; for the rest, how the local variance grows with brightness tells the models apart: flat for Gaussian, linear for Poisson, quadratic for speckle. The fitted curve also gives the noise strength, which the matching noise-aware filter uses to tune itself.</p>
     </header>
     <div class="detect">
       <div class="panel detect-in" data-reveal>
@@ -285,7 +286,7 @@
     <div class="gallery" id="gallery"></div>
 
     <article class="panel matrix-card" id="matrixCard" hidden>
-      <header class="card-head"><h3>Best SSIM per noise model <small>(best kernel of 3/5/7, default noise level)</small></h3><span class="chip" id="matrixCtx"></span></header>
+      <header class="card-head"><h3>Best SSIM per noise model <small>(best kernel of 3/5/7, default noise level · Auto ✦ = noise-aware, picks itself)</small></h3><span class="chip" id="matrixCtx"></span></header>
       <div class="matrix" id="matrix" role="table" aria-label="Best SSIM by noise type and filter"></div>
       <p class="note">“Synopsis” is the expected best filter from Table 2. A mismatch is a finding, not a failure. It shows the prediction being tested.</p>
     </article>

@@ -67,7 +67,8 @@
     ssim: (v) => v.toFixed(4),
   };
   const noiseName = (k) => (k === "none" ? "Little / no noise" : state.cfg.noises[k].name);
-  const filterName = (k) => state.cfg.filters[k];
+  const filterName = (k) => state.cfg.filters[k] || state.cfg.enhanced[k] || k;
+  const isEnhanced = (k) => k in state.cfg.enhanced;
 
   function countUp(el, to, format, dur = 650) {
     const from = parseFloat(el.dataset.val ?? "NaN");
@@ -269,7 +270,7 @@
     const src = state.file ? state.file.name : state.cfg.samples[state.sample].split(" - ")[0];
     $("#imgMeta").textContent =
       `${src} · ${r.size[0]}×${r.size[1]} ${r.color ? "colour" : "grayscale"} · ${noiseName(state.noise)} → ` +
-      `${filterName(state.filter)} ${state.ksize}×${state.ksize} · round trip ${Math.round(ms)} ms`;
+      `${r.method ? r.method.label : filterName(state.filter)}${r.method && r.method.strength ? " (" + r.method.strength + ")" : ""} · round trip ${Math.round(ms)} ms`;
 
     for (const card of $$(".metric")) {
       const key = card.dataset.key;
@@ -350,11 +351,17 @@
     $("#detSigma").textContent = a.sigma.toFixed(1);
     $("#detImpulse").textContent = (a.impulse_ratio * 100).toFixed(2) + "%";
     $("#detSlope").textContent = a.slope == null ? "n/a" : a.slope.toFixed(2);
-    const rec = a.recommendation;
+    const rec = a.recommendation, enh = a.enhanced;
     $("#detRec").innerHTML = "";
     const s = document.createElement("strong");
-    s.textContent = `Recommended: ${filterName(rec.filter)} ${rec.ksize}×${rec.ksize}. `;
-    $("#detRec").append(s, document.createTextNode(rec.why));
+    const est = Object.entries(a.params || {}).map(([k, v]) => `${k} ≈ ${v}`).join(", ");
+    s.textContent = enh.filter === "none"
+      ? "Recommended: leave it as it is. "
+      : `Recommended: ${filterName(enh.filter)}${est ? " (estimated " + est + ")" : ""}. `;
+    const classic = document.createElement("span");
+    classic.className = "muted";
+    classic.textContent = ` Best classic filter: ${filterName(rec.filter)} ${rec.ksize}×${rec.ksize}.`;
+    $("#detRec").append(s, document.createTextNode(enh.why), classic);
   }
 
   function renderScores(ul, scores) {
@@ -393,6 +400,10 @@
       f.hidden = !show;
     }
     $("#ksizeLabel").textContent = state.filter === "bilateral" ? "Diameter d" : "Kernel size";
+    const kf = $("#ksizeField");
+    if (kf) kf.hidden = isEnhanced(state.filter);
+    const note = $("#enhNote");
+    if (note) note.hidden = !isEnhanced(state.filter);
   }
 
   function bindRange(id, key, outId, parse = parseFloat, fmtOut = (v) => v) {
@@ -454,11 +465,20 @@
       syncNoiseSlider();
       runProcess();
     });
-    buildSeg($("#filterSeg"), Object.entries(cfg.filters), state.filter, (k) => {
+    buildSeg($("#filterSeg"), [...Object.entries(cfg.filters), ...Object.entries(cfg.enhanced)], state.filter, (k) => {
       state.filter = k;
       syncFilterFields();
       runProcess();
     });
+    // label the second group: methods that tune themselves from the noise analysis
+    const firstEnh = $(`#filterSeg button[data-key="${Object.keys(cfg.enhanced)[0]}"]`);
+    if (firstEnh) {
+      const sep = document.createElement("span");
+      sep.className = "seg-sep";
+      sep.textContent = "Noise-aware · self-tuning";
+      firstEnh.before(sep);
+      Object.keys(cfg.enhanced).forEach((k) => $(`#filterSeg button[data-key="${k}"]`).classList.add("enh"));
+    }
     syncNoiseSlider();
     syncFilterFields();
 
@@ -481,16 +501,12 @@
     });
 
     $("#useRec").addEventListener("click", () => {
-      const rec = state.last?.analysis?.recommendation;
-      if (!rec) return;
-      state.filter = rec.filter;
-      state.ksize = rec.ksize;
-      setSeg($("#filterSeg"), rec.filter);
-      const k = $("#ksize");
-      k.value = rec.ksize;
-      k.dispatchEvent(new Event("input"));
+      if (!state.last?.analysis) return;
+      state.filter = "auto";
+      setSeg($("#filterSeg"), "auto");
       syncFilterFields();
-      toast(`Applied ${filterName(rec.filter)} ${rec.ksize}×${rec.ksize}`);
+      runProcess();
+      toast("Applied Auto: detect → estimate → matching noise-aware filter");
     });
 
     // view tabs
@@ -531,9 +547,9 @@
       $("#d2Empty").classList.add("gone");
       $("#d2Type").textContent = noiseName(a.type);
       $("#d2Conf").textContent = Math.round(a.confidence * 100) + "%";
-      $("#d2Filter").textContent = `${filterName(a.recommendation.filter)} ${a.recommendation.ksize}×${a.recommendation.ksize}`;
+      $("#d2Filter").textContent = r.method.label.replace("Auto → ", "") + (r.method.strength ? ` (${r.method.strength})` : "");
       $("#d2Sigma").textContent = `${a.sigma.toFixed(1)} → ${r.sigma_after.toFixed(1)}`;
-      $("#d2Why").textContent = a.recommendation.why;
+      $("#d2Why").textContent = r.method.why;
       drawLogLog(a);
     } catch (e) {
       toast("Detection failed: " + e.message);
@@ -714,6 +730,15 @@
       el.innerHTML = `<img alt="Best ${filterName(f)} output" src="${b.image}"><div class="g-body"><h4>${filterName(f)} <span>${b.ksize}×${b.ksize}</span></h4><p>SSIM ${fmt.ssim(b.ssim)} · PSNR ${fmt.psnr(b.psnr)} dB</p></div>`;
       gal.append(el);
     });
+    if (c.auto) {
+      const best = c.best[winner];
+      const gain = c.auto.ssim - best.ssim;
+      const el = document.createElement("article");
+      el.className = "panel g-card auto" + (gain > 0 ? " win" : "");
+      el.style.setProperty("--i", cards.length);
+      el.innerHTML = `<img alt="Auto (noise-aware) output" src="${c.auto.image}"><div class="g-body"><h4>${c.auto.method.label} <span>auto</span></h4><p>SSIM ${fmt.ssim(c.auto.ssim)} · PSNR ${fmt.psnr(c.auto.psnr)} dB</p><p class="gain ${gain >= 0 ? "up" : "down"}">${gain >= 0 ? "+" : ""}${gain.toFixed(3)} SSIM vs best classic</p></div>`;
+      gal.append(el);
+    }
   }
 
   async function runMatrix() {
@@ -739,7 +764,7 @@
     const card = $("#matrixCard");
     card.hidden = false;
     const filters = Object.keys(state.cfg.filters);
-    let html = `<div class="h"></div>` + filters.map((f) => `<div class="h">${filterName(f)}</div>`).join("") + `<div class="h">Synopsis</div>`;
+    let html = `<div class="h"></div>` + filters.map((f) => `<div class="h">${filterName(f)}</div>`).join("") + `<div class="h h-auto">Auto ✦</div><div class="h">Synopsis</div>`;
     let i = 0;
     for (const [n, row] of Object.entries(r)) {
       const p = state.cfg.noises[n];
@@ -750,6 +775,10 @@
         const c = row.filters[f];
         const w = hi === lo ? 1 : (c.ssim - lo) / (hi - lo);
         html += `<div class="cell in${f === row.best ? " best" : ""}" style="--w:${w.toFixed(3)};--i:${i++}">${fmt.ssim(c.ssim)}<small>k=${c.ksize} · ${fmt.psnr(c.psnr)} dB</small></div>`;
+      }
+      if (row.auto) {
+        const gain = row.auto.ssim - row.filters[row.best].ssim;
+        html += `<div class="cell in auto${gain > 0 ? " best" : ""}" style="--w:1;--i:${i++}">${fmt.ssim(row.auto.ssim)}<small>${filterName(row.auto.method)} · ${gain >= 0 ? "+" : ""}${gain.toFixed(3)}</small></div>`;
       }
       const exp = SYNOPSIS[n];
       const ok = exp.includes(row.best);

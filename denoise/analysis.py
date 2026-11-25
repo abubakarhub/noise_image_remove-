@@ -44,7 +44,7 @@ ENHANCED = {
     "salt_pepper": {"filter": "adaptive_median",
                     "why": "Only the detected impulse pixels are replaced, from their clean neighbours; every other pixel is left untouched."},
     "gaussian": {"filter": "nlm",
-                 "why": "Non-local means averages similar patches from the whole neighbourhood, with strength set from the estimated sigma."},
+                 "why": "Non-local means averages similar patches from the whole neighbourhood, with strength set from the estimated sigma; a clipping-aware inverse keeps blacks and whites unbiased."},
     "speckle": {"filter": "vst_nlm",
                 "why": "A log-type variance-stabilising transform turns multiplicative noise into additive noise, which non-local means then removes."},
     "poisson": {"filter": "vst_nlm",

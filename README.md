@@ -10,8 +10,8 @@ Python/OpenCV pipeline interactively.
 
 On top of the four classic filters, a noise-aware **Auto** mode detects the noise type
 without a clean reference, measures its strength, and applies a matching self-tuning
-method. It beats the best classic filter (chosen with the clean image) by +0.044 SSIM and
-+2.7 dB PSNR on average. Noise detection is 95.9% accurate on the samples. Full numbers are in
+method. It beats the best classic filter (chosen with the clean image) by +0.057 SSIM and
++3.4 dB PSNR on average. Noise detection is 95.9% accurate on the samples. Full numbers are in
 [`results/accuracy.md`](results/accuracy.md).
 
 Live: https://noise-image-remove-hpqk.vercel.app/
@@ -76,7 +76,7 @@ and white present, speckle and Poisson predict the same curve.
 | Detected | Method | Strength from |
 |---|---|---|
 | Salt & pepper | Adaptive median: only impulse pixels are replaced, by the median of their clean neighbours (window grows 3→15) | impulse mask |
-| Gaussian | Non-local means (Buades et al., 2005) | estimated σ |
+| Gaussian | Non-local means (Buades et al., 2005) with a clipping-aware inverse | estimated σ |
 | Poisson / speckle | Variance-stabilising transform built from the fitted noise curve (Anscombe / log), NLM, exact unbiased inverse (Makitalo & Foi, 2011) including clipping | estimated peak / variance |
 | Clean | none | — |
 
@@ -85,10 +85,10 @@ images. Colour images are processed per channel.
 
 | Noise | Best classic (oracle) SSIM / PSNR | Auto SSIM / PSNR | Auto wins |
 |---|---|---|---|
-| Salt & Pepper | 0.887 / 28.83 dB | **0.953 / 35.79 dB** | 18/18 |
-| Gaussian | 0.765 / 27.53 dB | **0.796 / 28.85 dB** | 13/18 |
+| Salt & Pepper | 0.887 / 28.83 dB | **0.986 / 37.89 dB** | 18/18 |
+| Gaussian | 0.765 / 27.53 dB | **0.817 / 29.48 dB** | 15/18 |
 | Speckle | 0.703 / 24.81 dB | **0.726 / 25.75 dB** | 13/18 |
-| Poisson | 0.708 / 25.28 dB | **0.764 / 26.81 dB** | 17/18 |
+| Poisson | 0.708 / 25.28 dB | **0.763 / 26.99 dB** | 17/18 |
 
 ## Classic filter results (`results/summary.md`)
 

@@ -62,6 +62,9 @@ def severity(kind, k):
     return float(np.sqrt(k))
 
 
+SEARCH = 21  # NLM search window (pixels)
+
+
 def _odd(k):
     k = max(3, int(k))
     return k if k % 2 else k + 1
@@ -70,7 +73,8 @@ def _odd(k):
 # ---------------------------------------------------------------- salt & pepper
 def _impulses(ch):
     med = cv2.medianBlur(ch, 5)
-    return ((ch == 0) | (ch == 255)) & (cv2.absdiff(ch, med) > 40)
+    # > 5 (not 40): pepper on a dark background differs from its neighbours by only ~10 levels
+    return ((ch == 0) | (ch == 255)) & (cv2.absdiff(ch, med) > 5)
 
 
 def _adaptive_median_channel(ch, max_k=15, min_good=3):
@@ -118,7 +122,7 @@ def nlm(img, sigma, factor=None):
     """Non-local means with h derived from the noise standard deviation."""
     sigma = max(float(sigma), 0.5)
     h = (factor or h_factor("gaussian", sigma)) * sigma
-    return _per_channel(lambda ch: cv2.fastNlMeansDenoising(ch, None, h, 7, 21), img)
+    return _per_channel(lambda ch: cv2.fastNlMeansDenoising(ch, None, h, 7, SEARCH), img)
 
 
 # ---------------------------------------------------------------- Poisson / speckle
@@ -173,7 +177,7 @@ def vst_nlm(img, kind, k, factor=None):
     fwd = np.interp(img.astype(np.float64), v, t) * scale
     tr = np.clip(np.rint(fwd), 0, 255).astype(np.uint8)
     h = (factor or h_factor(kind, severity(kind, k))) * scale
-    den = _per_channel(lambda ch: cv2.fastNlMeansDenoising(ch, None, h, 7, 21), tr)
+    den = _per_channel(lambda ch: cv2.fastNlMeansDenoising(ch, None, h, 7, SEARCH), tr)
     et = np.maximum.accumulate(_expected_transform(kind, k, v, t))  # monotone for interp
     back = np.interp(den.astype(np.float64) / scale, et, np.arange(256, dtype=np.float64))
     return np.clip(np.rint(back), 0, 255).astype(np.uint8)
@@ -205,7 +209,9 @@ def apply_enhanced(img, method, info=None):
     if method == "nlm":
         # NLM needs one sd: use the model's value at mid-grey
         sd = np.sqrt(a + b * 128.0 + c * 128.0 ** 2)
-        return nlm(img, sd), info
+        # Run through the clipping-aware inverse: near black/white the noise is clipped, so
+        # plain averaging leaves a grey/brownish bias (+0.02..0.07 SSIM on our test sets).
+        return vst_nlm(img, "gaussian", sd * sd), info
     if method == "vst_nlm":
         kind = info["type"] if info["type"] in ("poisson", "speckle") else ("speckle" if c > 0 else "poisson" if b > 0 else "gaussian")
         k = {"gaussian": a, "poisson": b, "speckle": c}[kind]

@@ -44,8 +44,8 @@ upper bound); Auto only sees the noisy image.
 
 | Noise | Best classic filter (oracle) SSIM / PSNR | Auto (noise-aware) SSIM / PSNR | SSIM gain | PSNR gain | Auto wins |
 |---|---|---|---|---|---|
-| Salt & Pepper | 0.887 / 28.83 dB | **0.953 / 35.79 dB** | +0.066 | +6.96 dB | 18/18 |
-| Gaussian | 0.765 / 27.53 dB | **0.796 / 28.85 dB** | +0.031 | +1.31 dB | 13/18 |
+| Salt & Pepper | 0.887 / 28.83 dB | **0.986 / 37.89 dB** | +0.100 | +9.06 dB | 18/18 |
+| Gaussian | 0.765 / 27.53 dB | **0.817 / 29.48 dB** | +0.052 | +1.94 dB | 15/18 |
 | Speckle | 0.703 / 24.81 dB | **0.726 / 25.75 dB** | +0.022 | +0.94 dB | 13/18 |
-| Poisson | 0.708 / 25.28 dB | **0.764 / 26.81 dB** | +0.056 | +1.53 dB | 17/18 |
-| **All** | 0.766 / 26.61 dB | **0.810 / 29.30 dB** | +0.044 | +2.68 dB | |
+| Poisson | 0.708 / 25.28 dB | **0.763 / 26.99 dB** | +0.055 | +1.71 dB | 17/18 |
+| **All** | 0.766 / 26.61 dB | **0.823 / 30.03 dB** | +0.057 | +3.41 dB | |

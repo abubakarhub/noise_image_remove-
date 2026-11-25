@@ -49,3 +49,21 @@ upper bound); Auto only sees the noisy image.
 | Speckle | 0.703 / 24.81 dB | **0.726 / 25.75 dB** | +0.022 | +0.94 dB | 13/18 |
 | Poisson | 0.708 / 25.28 dB | **0.763 / 26.99 dB** | +0.055 | +1.71 dB | 17/18 |
 | **All** | 0.766 / 26.61 dB | **0.823 / 30.03 dB** | +0.057 | +3.41 dB | |
+
+## 3. Images the system has never seen, tested on the live site
+
+9 images used nowhere in development or tuning (Shepp-Logan phantom, checkerboard, binary blobs,
+and 6 colour screenshots of the app with flat areas and text), each with 8 noise cases plus the
+clean image, uploaded as noisy files to the deployed `/api/detect` endpoint:
+
+| | Result |
+|---|---|
+| Noise type detected correctly | 75 / 80 (93.8%) |
+| Mean SSIM: noisy upload → Auto output | 0.508 → **0.906** |
+| Best classic filter, chosen with the clean image | 0.879 |
+| Cases where Auto beats that best classic filter | 50 / 71 |
+
+The 5 detection errors are on bi-level or mostly-black synthetic images (blobs, checkerboard,
+phantom). Speckle and Poisson look the same there. The phantom with light Gaussian noise is the
+one case where the wrong type also gives a clearly worse output than a median filter. Response
+time on the free Vercel plan: about 1 s for grayscale and 3–7 s for colour images.
